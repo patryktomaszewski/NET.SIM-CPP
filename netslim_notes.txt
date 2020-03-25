@@ -1,0 +1,190 @@
+- Dostawy półproduktów do ramp odbywają się z określoną częstotliwością (np. co drugą turę symulacji), począwszy od pierwszej tury. Jednorazowo dostarczana jest jedna jednostka półproduktu.
+
+- Robotnik przetwarza na raz (w danej turze) pojedynczą jednostkę półproduktu, przy czym każdemu robotnikowi proces ten zajmuje określoną liczbę tur (może się ona różnić pomiędzy robotnikami, lecz zawsze wynosi co najmniej jedną turę).
+
+- Każdy robotnik posiada swoje preferencje odnośnie kolejności przetwarzania dostarczanych mu półproduktów – np. jedni wolą przetwarzać je w kolejności napływania (kolejka first in, first out, FIFO), inni wolą zaczynać od półproduktu dostarczonego jako ostatni (kolejka last in, first out, LIFO, stos). Na chwilę obecną robotnicy przetwarzają produkty wyłącznie w trybie albo FIFO albo LIFO, jednak w przyszłości na pewno zechcą opracować nowe schematy organizacji swej pracy…
+
+- Robotnik nie przerywa pracy nad aktualnie przetwarzanym produktem, gdy napływają do niego nowe półprodukty – te są po prostu wstawiane do kolejki i oczekują na zakończenie wykonywania przez robotnika aktualnego zadania.
+[N] Na chwilę obecną każda rampa/robotnik przekazuje przetworzony półprodukt jednemu z przypisanych mu odbiorców nie faworyzując żadnego z nich (tj. odbiorca jest wybierany z puli n
+odbiorców z jednakowym prawdopodobieństwem – 1/n). Jednak docelowo każda rampa/robotnik będzie mieć możliwość posiadania własnych preferencji w tym względzie (np. będzie przekazywać półprodukty robotnikowi A dwa razy częściej niż robotnikowi B) – należy to wymaganie uwzględnić na etapie projektowania, stosując odpowiednią strukturę danych do przechowywania informacji o preferencjach wyboru odbiorców.
+
+- Każdy magazyn ma możliwość przechowywania produktów w sposób niezależny od innych magazynów (tj. wewnętrzna realizacja funkcjonalności “kontenera półproduktów” może się różnić pomiędzy magazynami).
+
+
+=======================================================================================================================
+
+W sieci występują trzy podstawowe typy obiektów – rampa (Ramp), robotnik (Worker) i magazyn (Storehouse).
+
+
+* Nadawca półproduktów -> PackageSender
+
+Ponieważ i rampa i robotnik pełnią rolę nadawcy półproduktu (“przekaż półprodukt [do odbiorcy]”), przy czym dla obu tych typów obiektów logika obsługi odbiorców (ich dodawania, wybierania itd.) może być rozwiązania w identyczny sposób, funkcjonalność związana z rolą nadawcy półproduktu została wydzielona do klasy PackageSender, po której dziedziczą klasy Ramp i Worker.
+
+Nadawca posiada bufor [ad. 1)] – rodzaj paczkomatu – do którego można wstawić półprodukt przeznaczony do przekazania dalej za pomocą metody push_package() (faktyczne przekazanie odbywa się w etapie symulacji “Przekazanie półproduktów do odbiorców”, służy do tego metoda send_package()).
+
+Klasa PackageSender powinna przechować obiekt preferencji odbiorcy (dla uproszczenia – jako pole publiczne) oraz posiadać metodę do “wysyłania” półproduktu.
+
+Warto dodać też pole realizujące funkcjonalność bufora półproduktu gotowego do wysłania – dzięki temu istnieje możliwość opracowania jednej wspólnej implementacji metody wysyłającej półprodukt dla wszelkich możliwych typów nadawców półproduktów (nadawca umieszcza półprodukt w buforze za pomocą metody udostępnianej przez klasę PackageSender, a metoda wysyłająca przekazuje zawartość bufora dalej – do odbiorcy).
+
+
+-----------------------------------------------------------------------------------------------------------------------
+[ad. 1)] - zobacz wskazówki
+
+Bufor aktualnie przetwarzanego półproduktu
+
+Czy robotnikowi wystarczy posiadanie kolejki półproduktów (do przetworzenia), aby poprawnie zrealizować wymaganą w zadaniu funkcjonalność? Nie. Przetwarzanie półproduktu może zajmować robotnikowi więcej niż turę, co w przypadku robotników posiadających kolejkę typu FIFO (stos – dostęp wyłącznie do elementu “z wierzchu”) prowadziłoby do potencjalnych problemów, przykładowo (dla robotnika przetwarzającego produkt przez dwie tury):
+
+    tura #1 – dostawa: robotnik otrzymuje produkt 1
+    tura #1 – przetwarzanie: robotnik zaczyna przetwarzać produkt 1
+    tura #2 – dostawa: robotnik otrzymuje produkt 2, który “zakrywa” produkt 1
+    tura #2 – przetwarzanie: robotnik “kończy” przetwarzanie produktu 2 (błąd!)
+
+Rozwiązaniem tego problemu może być np. wprowadzenie w klasie Worker bufora półproduktu – półprodukt, który aktualnie przetwarza robotnik byłby usuwany z kolejki i wstawiany do takiego bufora.
+-----------------------------------------------------------------------------------------------------------------------
+
+
+* Preferencje wyboru odbiorcy - dane i operacje na tych danych -> ReceiverPreferences
+
+Ponieważ docelowo każdy nadawca półproduktu będzie mieć możliwość posiadania własnych preferencji w kwestii schematu wyboru odbiorców (tj. prawdopodobieństwa wyboru poszczególnych odbiorców mogą się różnić między sobą), najwygodniej będzie trzymać informacje o takich preferencjach w postaci mapy) (in. tablicy asocjacyjnej) – zbioru par “klucz → wartość [skojarzona z danym kluczem]”, przy czym klucze są unikalne. W tym przypadku kluczem będzie wskaźnik na odbiorcę, a wartością – prawdopodobieństwo wyboru danego odbiorcy. Do obsługi takiej mapy przydadzą się odpowiednie funkcje – jak choćby funkcja losująca odbiorcę, funkcja dodająca/usuwająca odbiorcę (co przy obecnych założeniach projektowych wiąże się z koniecznością przeskalowania prawdopodobieństw w mapie po wykonaniu danej operacji, tak aby suma prawdopodobieństw w nowej mapie wynosiła 1) – zatem całą funkcjonalność “dane + operacje na tych danych” warto wydzielić do osobnej klasy preferencji odbiorcy – ReceiverPreferences.
+
+Jak wyznaczać odbiorcę? Skoro dane o preferencjach odbiorcy stanowią dyskretny rozkład prawdopodobieństwa, można na ich podstawie wyznaczyć dystrybuantę takiego rozkładu – wówczas wystarczy wylosować wartość prawdopodobieństwa p∈[0,1]
+
+i sprawdzić, w przedziale którego odbiorcy się ona znajduje.
+
+Aby testowanie funkcji do wyznaczania odbiorcy w klasie ReceiverPreferences było możliwe, trzeba zaprojektować ją w taki sposób, aby (w razie konieczności) móc wyeliminować z niej element losowości – ideą testów jednostkowych jest bowiem zapewnienie powtarzalności wyników. Najrozsądniej jest przekazać w parametrze konstruktora klasy ReceiverPreferences uchwyt do funkcji zwracającej “losową” wartość (tj. argumentem konstruktora będzie obiekt funkcyjny). W teście będziemy mieli możliwość przekazania odpowiednio spreparowanej wersji takiej funkcji, która będzie zwracać konkretne, ustalone przez nas wartości.
+
+Na chwilę obecną nie zajmuj sobie głowy tworzeniem API umożliwiającego dodawanie odbiorcy z zadanym prawdopodobieństwem albo tworzeniem w pełni uniwersalnej implementacji funkcji do skalowania prawdopodobieństwa.
+
+Dla własnej wygody zdefiniuj w klasie ReceiverPreferences aliasy na typy iteratorów dla kontenera użytego do przechowywania preferencji:
+
+using preferences_t = std::map<IPackageReceiver*, double>;
+using const_iterator = preferences_t::const_iterator;
+using iterator = preferences_t::iterator;
+
+Pamiętaj, aby zapewnić użytkownikom tego szablonu dostęp do wszystkich metod “tylko do odczytu” [c]begin() i [c]end() kontenera użytego do przechowywania preferencji (tj. łącznie do 4 metod).
+
+Klasa powinna zawierać metody do dodawania i usuwania odbiorców, które pozwolą zachować niezmiennik klasy (niezmiennik to: gdy istnieje choć jeden odbiorca, łączna suma prawdopodobieństw wyboru poszczególnych odbiorców sumuje się do 1).
+
+Klasa powinna zawierać metodę do wyboru odbiorcy, która nie posiada żadnych parametrów i zwraca tzw. uchwyt (np. wskaźnik, referencję) do wybranego odbiorcy. 
+
+
+* Odbiorca półproduktów -> IPackageReceiver
+
+Zarówno robotnik jak i magazyn mają wspólną funkcjonalność odbiorcy półproduktów (“odbierz półprodukt”, “przeglądnij przechowywane półprodukty”), jednak ich implementacja w klasach Worker i Storehouse będzie się istotnie różnić (m.in. będzie zależeć od typu “pojemnika” na półprodukty) – w związku z tym jedynym rozwiązaniem jest zdefiniowanie odpowiedniego interfejsu odbiorcy półproduktów (IPackageReceiver). Aby umożliwić generowanie raportów o strukturze sieci interfejs odbiorcy półproduktów powinien pozwalać na zidentyfikowanie konkretnego typu odbiorcy – gdyż w preferencjach odbiorcy (ReceiverPreferences) przechowujemy jedynie wskaźnik na IPackageReceiver. W tym celu możemy utworzyć metodę, która zwróci pewien unikalny identyfikator danego typu odbiorcy (do zdefiniowania takich identyfikatorów służy typ wyliczeniowy) oraz numer identyfikacyjny (ID, “liczbę porządkową”).
+
+Interfejs IPackageReceiver powinien posiadać metodę do “odbioru” półproduktu, metody delegujące2) pozwalające na uzyskanie dostępu “tylko do odczytu” do kontenera przechowującego półprodukty (tj. metody [c]begin(), [c]end()), oraz metody identyfikujące danego odbiorcę (tj. jego typ oraz ID). 
+
+* Rampa -> Ramp
+
+Klasa Ramp powinna posiadać metodę służącą do “dostarczania półproduktów” (deliver_goods(t: Time)) – metoda ta będzie wywoływana w każdej turze symulacji, w fazie “Dostawa”. Argumentem tej metody jest bieżący czas symulacji – pozwala ona rampie zorientować się, kiedy powinna “wytworzyć” półprodukt (na podstawie argumentu di typu TimeOffset przekazanego w konstruktorze klasy Ramp reprezentującego okres pomiędzy dostawami).
+
+Ponieważ półprodukty są dostarczane na rampę pojedynczo i są one od razu przekazywane dalej, rampa nie musi trzymać kolekcji dostarczonych półproduktów – może od razu umieszczać dostarczony półprodukt w buforze klasy PackageSender.
+
+
+* Robotnik -> Worker
+
+Ponieważ klasa Worker nie wie, jaki będzie typ dynamiczny otrzymanego obiektu kolejki półproduktów (dostaje tylko wskaźnik na IPackageQueue), musi przechowywać go z użyciem inteligentnego wskaźnika odpowiedniego typu.
+
+Robotnik powinien posiadać metodę służącą do “wykonywania pracy” (do_work(t: Time)) – metoda ta będzie wywoływana w każdej turze symulacji, w fazie “Przetworzenie”. Argumentem tej metody jest bieżący czas symulacji – robotnik powinien zapamiętać tę wartość, aby później być w stanie określić, kiedy rozpoczął przetwarzanie półproduktu i kiedy należy zakończyć jego przetwarzanie (na podstawie argumentu pd typu TimeOffset przekazanego w konstruktorze klasy Worker reprezentującego okres przetwarzania półproduktu).
+
+
+-----------------------------------------------------------------------------------------------------------------------
+Wskazówki
+
+- Dziedziczenie wielokrotne
+
+Zwróć uwagę, że język C++ dopuszcza dziedziczenie wielokrotne czyli sytuację, w której jedna klasa potomna dziedziczy po kilku klasach macierzystych (zob. dziedziczenie wielokrotne).
+Specyfikator dostępu "protected"
+
+- W przypadku, gdy dostęp do danej składowej nie powinien być publiczny, natomiast klasy potomne również powinny mieć możliwość korzystania z takiej składowej – wówczas należy użyć specyfikatora dostępu protected
+
+- Magazyn półproduktów
+
+Ponieważ klasa Storehouse nie wie, jaki będzie typ dynamiczny otrzymanego obiektu składowiska półproduktów (dostaje tylko wskaźnik na IPackageStockpile), musi przechowywać go z użyciem inteligentnego wskaźnika odpowiedniego typu.
+
+
+- Nowe aliasy
+
+Zarówno moment w czasie, jak i okres czasu mogą być reprezentowane z użyciem dowolnego typu całkowitego. Zwróć jednak uwagę, że od strony koncepcyjnej to dwa różne pojęcia (odpowiednio: punkt i odcinek w przestrzeni jednowymiarowej czasu) – w związku z tym dla czytelności programu warto zdefiniować stosowne aliasy, odpowiednio Time i TimeOffset.
+
+Zwróć też uwagę, że wytyczne projektowe nie precyzują sposobu generowania liczb losowych podczas wyboru odbiorcy półproduktu – ponieważ prawdopodobieństwo ma wartości z przedziału [0,1], każda funkcja nie przyjmującą żadnych argumentów i zwracającą wartość typu double z tego przedziału może pełnić rolę funkcji losującej, przykładowo:
+
+KOD:
+        ---------------------------------------------------------------------------------------------------------------
+        #include <cstdlib>
+        #include <iostream>
+        #include <random>
+        #include <ctime>
+         
+        std::random_device rd;
+        std::mt19937 rng(rd());
+         
+        double probability_generator_1() {
+            return std::generate_canonical<double, 10>(rng);
+        }
+         
+        double probability_generator_2() {
+            return (double) (rand() % RAND_MAX) / RAND_MAX;  // NIEZALECANE: mała losowość generowanego ciągu liczb...
+        }
+         
+         
+        int main() {
+            srand(time(0));
+         
+            printf("pg1() = %.4lf\n", probability_generator_1());
+            printf("pg2() = %.4lf\n", probability_generator_2());
+         
+            return EXIT_SUCCESS;
+        }
+        ---------------------------------------------------------------------------------------------------------------
+
+W związku z tym, aby nie wiązać się z konkretną implementacją takiej funkcji losującej, lepiej jest zdefiniować stosowny alias – ProbabilityGenerator na właściwy typ funkcyjny, zgodnie ze wcześniejszą uwagą. 
+
+
+- Bufor
+
+Bufor posiada dwa podstawowe stany – może albo zawierać obiekt, albo go nie zawierać; bufor przypomina zatem pudełko, do którego można coś włożyć, ale może też ono być w danym momencie puste.
+
+Język C++ nie udostępnia specjalnych obiektów i literałów w stylu None w języku Python albo null w języku Java, umożliwiających każdej zmiennej pełnienie roli bufora, natomiast począwszy od standardu C++17 funkcjonalność taka jest dostępna z użyciem kontenera standardowego std::optional.
+
+W starszych standardach analogiczną funkcjonalność można uzyskać korzystając z typu std::pair<T,bool>, w której wspomniana wartość logiczna skojarzona z obiektem typu T informuje, czy obiekt ten “występuje” (ew. można użyć innych standardowych kontenerów, np. std::vector albo std::list, lecz jest to rozwiązanie znacznie mniej eleganckie – gdyż kontenery te nie mają ograniczonej długości).
+
+Oto tzw. minimalny działający przykład (minimal working example, MWE) użycia kontenera std::optional: 
+
+KOD:
+        ---------------------------------------------------------------------------------------------------------------
+        #include <iostream>
+        #include <optional>
+         
+        void print_opt(std::optional<int> opt) {
+           if (opt) {  // sprawdź, czy `opt` zawiera wartość; równoważnie: opt.has_value()
+               // dostęp do wartości odbywa się jak w przypadku wskaźnika (*p, p->x); równoważnie: opt.value()
+               std::cout << "opt has a value: " << *opt << std::endl;
+           } else {
+               std::cout << "opt is empty" << std::endl;
+           }
+        }
+         
+        int main() {
+           std::optional<int> opt = std::nullopt;
+           print_opt(opt);
+         
+           opt.emplace(1);  // umieść wartość "w miejscu" (tj. bez wykonywania zbędnej kopii obiektu)
+           print_opt(opt);
+         
+           opt = 3;  // umieść wartość za pomocą przypisania
+           print_opt(opt);
+         
+           opt.reset();  // usuń wartość
+           print_opt(opt);
+         
+           return 0;
+        }
+        ---------------------------------------------------------------------------------------------------------------
+
+- Dziedziczenie po klasie konkretnej
+
+W rozwiązaniu “wzorcowym” w przypadku klas reprezentujących rampę i robotnika zastosowano dziedziczenie po klasie konkretnej PackageSender, jednak w ogólnym ujęciu dziedziczenie po klasie konkretnej jest niewskazane – należy zastąpić dziedziczenie kompozycją i utworzyć odpowiednie metody delegujące. W tym przypadku zastosowano je dlatego, żeby nie komplikować nadmiernie rozwiązania tworzeniem wielu metod delegujących.
+
+Metoda delegująca to metoda, która jedynie “przekazuje dalej” zlecenie wykonania danej operacji i ew. zwraca uzyskany w ten sposób wynik.
+

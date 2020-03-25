@@ -1,0 +1,7 @@
+Członkowie grupy 9:
+(1) Dominik Woźniak, 302939
+(2) Patrky Tomaszewski, 302930
+
+Kierownik grupy: Dominik Woźniak
+
+URL repozytorium: https://github.com/dominikwozniak/NetSlim-CPP
